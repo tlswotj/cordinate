@@ -12,7 +12,9 @@ find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 #find_package(sensor_msgs REQUIRED)
 
-
+include_directories(
+  "${PROJECT_SOURCE_DIR}/src"
+)
 # libserial 찾기
 #find_path(LIBSERIAL_INCLUDE_DIR
 #  NAMES libserial/SerialPort.h
@@ -41,6 +43,9 @@ ament_target_dependencies(cordinate_converter rclcpp std_msgs nav_msgs)
 install(TARGETS
   cordinate_converter
   DESTINATION lib/${PROJECT_NAME}
+)
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 #install(DIRECTORY launch/
