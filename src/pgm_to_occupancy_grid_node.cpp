@@ -1,6 +1,7 @@
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include <algorithm> // std::max 사용
+#include <bits/algorithmfwd.h>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -14,7 +15,7 @@ public:
     node_ = node;
     pgm_file_ = pgm_path;
     yaml_file_ = yaml_path;
-    inflation_radius_ = 0.05;
+    inflation_radius_ = 0.30;
 
     if (!pgm_file_.empty() && !yaml_file_.empty()) {
       loadMap();
@@ -41,9 +42,9 @@ private:
   double resolution;
   double origin[3];
   bool negate;
-  int occupied_thresh;
-  int free_thresh;
-  std::vector<std::vector<uint8_t>> map_;
+  double occupied_thresh;
+  double free_thresh;
+  std::vector<std::vector<int8_t>> map_;
 
   rclcpp::TimerBase::SharedPtr publish_timer_;
 
@@ -71,15 +72,19 @@ private:
         ss >> delimiter >> origin[0] >> delimiter >> origin[1] >> delimiter >>
             origin[2];
       } else if (key == "negate:") {
-        int negate_val;
-        ss >> negate_val;
-        negate = (negate_val != 0);
+        ss >> negate;
       } else if (key == "occupied_thresh:") {
         ss >> occupied_thresh;
       } else if (key == "free_thresh:") {
         ss >> free_thresh;
       }
     }
+    RCLCPP_INFO(node_->get_logger(),
+                "yaml load compleate, resolution : %.3f, origin : (%.3f, "
+                "%.3f), threash : %.3f, %.3f, negate : %d",
+                resolution, origin[0], origin[1], occupied_thresh, free_thresh,
+                negate);
+
     yaml_file_stream.close();
 
     // PGM 파일 로딩
@@ -104,30 +109,26 @@ private:
     // -1: Unknown, 0: Free, 100: Occnegateupied
     std::vector<int8_t> occupancy_data(width * height, -1);
     for (int y = 0; y < height; ++y) {
-      std::vector<uint8_t> temp;
-
       for (int x = 0; x < width; ++x) {
         int src_index = y * width + x;
         int dest_index = (height - 1 - y) * width + x; // 수직 반전
 
         double pixel_value =
             static_cast<double>(pgm_data[src_index]) / max_value;
-        if (negate) {
+        if (!negate) {
           pixel_value = 1.0 - pixel_value;
         }
 
         if (pixel_value > occupied_thresh) {
           occupancy_data[dest_index] = 100; // 장애물
-          temp.push_back(100);
+
         } else if (pixel_value < free_thresh) {
           occupancy_data[dest_index] = 0; // Free
-          temp.push_back(0);
+
         } else {
           occupancy_data[dest_index] = 100; // Unknown
-          temp.push_back(100);
         }
       }
-      map_.push_back(temp);
     }
 
     // 인플레이션 적용: 장애물과 인접한 free cell에 대해 비용 부여
@@ -177,14 +178,30 @@ private:
                       99.0 / static_cast<double>(inflation_radius_cells);
                   int cost = static_cast<int>(
                       std::round((inflation_radius_cells - distance) * factor));
-
-                  rclcpp::TimerBase::SharedPtr publish_timer_;
+                  cost = std::clamp(cost, 0, 99); // 0~99 범위로 제한
+                  // 원래 free(0)인 셀에 대해서만 인플레이션 적용 (unknown은
+                  // 그대로 유지)
+                  if (original[n_idx] == 0) {
+                    occupancy_data[n_idx] = std::max(occupancy_data[n_idx],
+                                                     static_cast<int8_t>(cost));
+                  }
                 }
               }
             }
           }
         }
       }
+    }
+  }
+
+  void vector_converter(std::vector<int8_t> occupancy_data, int wide,
+                        int height) {
+    for (int y = 0; y < height; y++) {
+      std::vector<int8_t> temp;
+      for (int x = 0; x < wide; x++) {
+        temp.push_back(occupancy_data[y * wide + x]);
+      }
+      map_.push_back(temp);
     }
   }
 
