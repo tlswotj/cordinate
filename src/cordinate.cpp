@@ -1,18 +1,13 @@
+#include "cordinate.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <cmath>
 #include <fstream>
 #include <string>
 #include <vector>
-//#include "std_msgs/msg/header.hpp"
-#include "builtin_interfaces/msg/time.hpp"
-#include "cordinate.hpp"
-#include "nav_msgs/msg/path.hpp"
-//#include "pgm_to_occupancy_grid_node.cpp"
-#include <ament_index_cpp/get_package_share_directory.hpp>
-//#include "geometry_msgs/msg/pose.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav_msgs/msg/path.hpp"
 
 CordinateConverter::CordinateConverter(rclcpp::Node::SharedPtr node,
                                        bool node_mode = false,
@@ -112,7 +107,7 @@ void CordinateConverter::readPath(nav_msgs::msg::Path path_topic) {
     std::vector<double> temp;
     temp.push_back(path_topic.poses[i].pose.position.x);
     temp.push_back(path_topic.poses[i].pose.position.y);
-    temp.push_back(extract_speed(path_topic.poses[i].header.stamp));
+    temp.push_back(path_topic.poses[i].pose.position.z);
     global_path_.push_back(temp);
   }
   for (int i = 0; i < global_path_.size(); i++) {
@@ -120,11 +115,6 @@ void CordinateConverter::readPath(nav_msgs::msg::Path path_topic) {
     global_path_distance_.push_back(calcPathToPathDistance(i));
     global_path_reaching_time_.push_back(calcPathToPathRechingTime(i));
   }
-}
-
-double CordinateConverter::extract_speed(builtin_interfaces::msg::Time &stamp) {
-  return static_cast<double>(stamp.sec) +
-         static_cast<double>(stamp.nanosec) / 1e9;
 }
 
 double CordinateConverter::calcPathToPathHeading(int idx) {
@@ -177,6 +167,9 @@ std::vector<double> CordinateConverter::globalToFrenet(double x, double y) {
   std::pair<double, double> out2 = calcProj(closest_idx - 1, closest_idx, x, y);
   double dist;
   double s;
+  RCLCPP_INFO(node_->get_logger(), "s ; %.3f, d: %.3f", out1.second,
+              out1.first);
+
   if (std::abs(out1.first) > std::abs(out2.first)) {
     dist = out2.first;
     s = out2.second + calcPathDistance(0, closest_idx);
@@ -192,6 +185,9 @@ std::vector<double> CordinateConverter::globalToFrenet(double x, double y) {
 
 double CordinateConverter::calcPathDistance(int idx_start, int idx_end) {
   double distance_counter = 0;
+  if (idx_end < idx_start) {
+    idx_end += global_path_.size();
+  }
   for (int idx = idx_start; idx < idx_end; idx++) {
     distance_counter += calcPathToPathDistance(idx);
   }
@@ -201,6 +197,10 @@ double CordinateConverter::calcPathDistance(int idx_start, int idx_end) {
 double CordinateConverter::calcDistance(double x, double y, double x1,
                                         double y1) {
   return sqrt(pow(x - x1, 2) + pow(y - y1, 2));
+}
+
+double CordinateConverter::getpathLenth() {
+  return calcPathDistance(0, global_path_.size() - 1);
 }
 
 void CordinateConverter::path_publisher() {
@@ -216,13 +216,11 @@ void CordinateConverter::path_msg_generator() {
 
   for (int i = 0; i < global_path_.size(); i++) {
     geometry_msgs::msg::PoseStamped pose;
-    pose.header.stamp.sec = static_cast<int32_t>(global_path_[i][2]);
-    pose.header.stamp.nanosec = static_cast<int32_t>(
-        (global_path_[i][2] - pose.header.stamp.sec) * 1e9);
+    pose.header.stamp = node_->get_clock()->now();
     pose.header.frame_id = "map";
     pose.pose.position.x = global_path_[i][0];
     pose.pose.position.y = global_path_[i][1];
-    pose.pose.position.z = 0.0;
+    pose.pose.position.z = global_path_[i][2];
     pose.pose.orientation.z = global_path_heading_[i];
     pose.pose.orientation.w = 1.0; // 단순한 예제이므로 회전 없음
     global_path_msg_->poses.push_back(pose);
@@ -285,7 +283,8 @@ int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   auto node = rclcpp::Node::make_shared("cordinate_converter");
   CordinateConverter c(node, true);
-  std::vector<double> a = c.globalToFrenet(-3.3055674, 1.6219812);
+  std::vector<double> a = c.globalToFrenet(0.1134318, 5.2239407);
+  RCLCPP_INFO(node->get_logger(), "entire path lenth: %.3f", c.getpathLenth());
   RCLCPP_INFO(node->get_logger(), "frenet frame : s %.3f, d %.3f", a[0], a[1]);
   rclcpp::spin(node);
 }

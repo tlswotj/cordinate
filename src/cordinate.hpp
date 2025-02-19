@@ -22,6 +22,7 @@ public:
 
   std::vector<double> globalToFrenet(double x, double y);
   std::vector<double> FrenetToGlobal(double x, double y);
+  double getpathLenth();
 
 private:
   int getClosestsIndex(double x, double y);
@@ -51,7 +52,6 @@ private:
   bool node_mode_;
 
   bool path_recives;
-  double extract_speed(builtin_interfaces::msg::Time &stamp);
 
   std::vector<std::vector<double>> global_path_;
   std::vector<double> global_path_heading_;
