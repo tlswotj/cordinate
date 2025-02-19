@@ -171,12 +171,19 @@ int CordinateConverter::getClosestsIndex(double x, double y) {
   return idx;
 }
 
-std::vector<double> CordinateConverter::globalToFrenel(double x, double y) {
+std::vector<double> CordinateConverter::globalToFrenet(double x, double y) {
   int closest_idx = getClosestsIndex(x, y);
-
-  double dist = calcDistance(x, y, global_path_[closest_idx][0],
-                             global_path_[closest_idx][1]);
-  double s = calcPathDistance(0, closest_idx);
+  std::pair<double, double> out1 = calcProj(closest_idx, closest_idx + 1, x, y);
+  std::pair<double, double> out2 = calcProj(closest_idx - 1, closest_idx, x, y);
+  double dist;
+  double s;
+  if (std::abs(out1.first) > std::abs(out2.first)) {
+    dist = out2.first;
+    s = out2.second + calcPathDistance(0, closest_idx);
+  } else {
+    dist = out1.first;
+    s = out1.second + calcPathDistance(0, closest_idx);
+  }
   std::vector<double> output;
   output.push_back(s);
   output.push_back(dist);
@@ -233,40 +240,52 @@ std::vector<std::vector<double>> CordinateConverter::getGlobalPath() {
 
 std::pair<double, double> CordinateConverter::calcProj(int idx, int next_idx,
                                                        double x, double y) {
-  double x1 = global_path_[idx][0], y1 = global_path_[idx][1];
-  double x2 = global_path_[next_idx][0], y2 = global_path_[next_idx][1];
-  double x3 = x, y3 = y;
-  double ABx = x2 - x1;
-  double ABy = y2 - y1;
-  // 벡터 AC = (x3 - x1, y3 - y1)
-  double ACx = x3 - x1;
-  double ACy = y3 - y1;
+  // 인덱스가 음수가 될 경우를 고려하여 올바르게 보정합니다.
+  int n = global_path_.size();
+  idx = (idx % n + n) % n;
+  next_idx = (next_idx % n + n) % n;
 
-  // 내적(AB·AC) / 내적(AB·AB)
-  double dotABAC = ABx * ACx + ABy * ACy;
+  double Ax = global_path_[idx][0], Ay = global_path_[idx][1];
+  double Bx = global_path_[next_idx][0], By = global_path_[next_idx][1];
 
-  double dotABAB = ABx * ABx + ABy * ABy;
+  // 벡터 AB 구하기
+  double dx = Bx - Ax;
+  double dy = By - Ay;
+  double segment_length_sq = dx * dx + dy * dy;
+  if (segment_length_sq < 1e-6) { // 두 점이 거의 같은 경우
+    return std::make_pair(0.0, 0.0);
+  }
 
-  double t = dotABAC / dotABAB;
+  // 점 A에서 점 P=(x,y)까지의 벡터와 AB 벡터의 내적을 이용해 투영 인자 t 계산
+  double t = ((x - Ax) * dx + (y - Ay) * dy) / segment_length_sq;
 
-  // 발 D의 좌표 (Dx, Dy)
-  double Dx = x1 + t * ABx;
-  double Dy = y1 + t * ABy;
+  // 투영점 좌표 계산: A + t*(B-A)
+  double proj_x = Ax + t * dx;
+  double proj_y = Ay + t * dy;
 
-  // CD 거리
-  double distCD = hypot(x3 - Dx, y3 - Dy);
+  // 점 P와 투영점 사이의 유클리드 거리 (절대값)
+  double d =
+      std::sqrt((x - proj_x) * (x - proj_x) + (y - proj_y) * (y - proj_y));
 
-  // A에서 발 D까지 거리
-  double distAD = hypot(Dx - x1, Dy - y1);
+  // 교차곱(cross product)을 이용해 d의 부호 결정:
+  // AB x AP의 z성분이 음수면 오른쪽, 양수면 왼쪽으로 간주
+  double cross = dx * (y - Ay) - dy * (x - Ax);
+  if (cross < 0) {
+    d = -d;
+  }
 
-  return std::make_pair(distCD, distAD);
+  // 종방향 거리 s: A부터 투영점까지의 거리 (t*segment_length)
+  double segment_length = std::sqrt(segment_length_sq);
+  double s = t * segment_length;
+
+  return std::make_pair(d, s);
 }
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   auto node = rclcpp::Node::make_shared("cordinate_converter");
   CordinateConverter c(node, true);
-  std::vector<double> a = c.globalToFrenel(3.0, 2.0);
-  RCLCPP_INFO(node->get_logger(), "frenet frame : s %3.f, d %3.f", a[0], a[1]);
+  std::vector<double> a = c.globalToFrenet(-3.3055674, 1.6219812);
+  RCLCPP_INFO(node->get_logger(), "frenet frame : s %.3f, d %.3f", a[0], a[1]);
   rclcpp::spin(node);
 }
