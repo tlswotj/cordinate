@@ -21,11 +21,13 @@ public:
   std::vector<std::vector<double>> getGlobalPath();
 
   std::vector<double> globalToFrenet(double x, double y);
-  std::vector<double> FrenetToGlobal(double x, double y);
+  std::vector<double> FrenetToGlobal(double s, double d);
   double getpathLenth();
 
 private:
   int getClosestsIndex(double x, double y);
+
+  int getStartPathFromFrenet(double s, double d);
 
   void readPath(std::string path_file_path);
 
@@ -41,7 +43,15 @@ private:
 
   double calcPathDistance(int idx_start, int idx_end);
 
-  std::pair<double, double> calcProj(int idx, int next_idx, double x, double y);
+  std::pair<double, double> calcDS(int idx, int next_idx, double x, double y);
+
+  std::vector<double> calcProjv(std::vector<double> vectorA,
+                                std::vector<double> vectorB);
+
+  std::vector<double> crossProduct(std::vector<double> vectorA,
+                                   std::vector<double> vectorB);
+
+  double dotProudct(std::vector<double> vectorA, std::vector<double> vectorB);
 
   void path_publisher();
 

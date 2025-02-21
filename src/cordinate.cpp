@@ -163,8 +163,8 @@ int CordinateConverter::getClosestsIndex(double x, double y) {
 
 std::vector<double> CordinateConverter::globalToFrenet(double x, double y) {
   int closest_idx = getClosestsIndex(x, y);
-  std::pair<double, double> out1 = calcProj(closest_idx, closest_idx + 1, x, y);
-  std::pair<double, double> out2 = calcProj(closest_idx - 1, closest_idx, x, y);
+  std::pair<double, double> out1 = calcDS(closest_idx, closest_idx + 1, x, y);
+  std::pair<double, double> out2 = calcDS(closest_idx - 1, closest_idx, x, y);
   double dist;
   double s;
   RCLCPP_INFO(node_->get_logger(), "s ; %.3f, d: %.3f", out1.second,
@@ -236,8 +236,8 @@ std::vector<std::vector<double>> CordinateConverter::getGlobalPath() {
   return global_path_;
 }
 
-std::pair<double, double> CordinateConverter::calcProj(int idx, int next_idx,
-                                                       double x, double y) {
+std::pair<double, double> CordinateConverter::calcDS(int idx, int next_idx,
+                                                     double x, double y) {
   // 인덱스가 음수가 될 경우를 고려하여 올바르게 보정합니다.
   int n = global_path_.size();
   idx = (idx % n + n) % n;
@@ -277,6 +277,102 @@ std::pair<double, double> CordinateConverter::calcProj(int idx, int next_idx,
   double s = t * segment_length;
 
   return std::make_pair(d, s);
+}
+
+std::vector<double> CordinateConverter::FrenetToGlobal(double s, double d) {
+  if (s < 0)
+    s += getpathLenth();
+  s = std::fmod(s, getpathLenth());
+  int start_idx = getStartPathFromFrenet(s, d);
+  int next_idx = (start_idx + 1) % global_path_.size();
+  std::vector<double> start_path_point = {global_path_[start_idx][0],
+                                          global_path_[start_idx][1]};
+  std::vector<double> next_path_point = {global_path_[start_idx][0],
+                                         global_path_[start_idx][1]};
+  std::vector<double> path_vector =
+      pointToVector(start_path_point, next_path_point);
+  double single_path_lenth = std::sqrt(dotProudct(path_vector, path_vector));
+  double path_to_projPoint_lenth = (s - calcPathDistance(0, start_idx));
+  std::vector<double> projPoint = vectorAdd(
+      vectorScalarMultiple(vectorScalarDivision(path_vector, single_path_lenth),
+                           path_to_projPoint_lenth),
+      start_path_point);
+}
+
+std::vector<double> toNormal2DVector(std::vector<double> vector){
+    std::vector<double>
+
+}
+
+std::vector<double> vectorSubtract(std::vector<double> vectorA,
+                                   std::vector<double> vectorB) {
+  std::vector<double> output;
+  for (int i = 0; i < std::min(vectorA.size(), vectorB.size()); i++) {
+    output.push_back(vectorA[i] - vectorB[i]);
+  }
+  return output;
+}
+
+std::vector<double> vectorAdd(std::vector<double> vectorA,
+                              std::vector<double> vectorB) {
+  std::vector<double> output;
+  for (int i = 0; i < std::min(vectorA.size(), vectorB.size()); i++) {
+    output.push_back(vectorA[i] + vectorB[i]);
+  }
+  return output;
+}
+
+std::vector<double> vectorScalarMultiple(std::vector<double> vector, double a) {
+  for (int i = 0; i < vector.size(); i++) {
+    vector[i] *= a;
+  }
+  return vector;
+}
+
+std::vector<double> vectorScalarDivision(std::vector<double> vector, double a) {
+  std::vector<double> output;
+  for (int i = 0; i < vector.size(); i++) {
+    output.push_back(vector[i] / a);
+  }
+  return output;
+}
+
+std::vector<double> pointToVector(std::vector<double> start_point,
+                                  std::vector<double> end_point) {
+  return vectorSubtract(end_point, start_point);
+}
+
+std::vector<double> CordinateConverter::calcProjv(std::vector<double> vectorA,
+                                                  std::vector<double> vectorB) {
+  double projT = dotProudct(vectorA, vectorB) / dotProudct(vectorB, vectorB);
+  vectorB[0] *= projT;
+  vectorB[1] *= projT;
+  return vectorB;
+}
+
+double CordinateConverter::dotProudct(std::vector<double> vectorA,
+                                      std::vector<double> vectorB) {
+  double dot = vectorA[0] * vectorB[0] + vectorA[1] * vectorB[1];
+  return {dot};
+}
+
+std::vector<double>
+CordinateConverter::crossProduct(std::vector<double> vectorA,
+                                 std::vector<double> vectorB) {
+  double cross = vectorA[0] * vectorB[1] - vectorA[1] * vectorB[0];
+  return {cross};
+}
+
+int CordinateConverter::getStartPathFromFrenet(double s, double d) {
+  int idx_counter = 0;
+  if (s > getpathLenth())
+    s = std::fmod(s, (getpathLenth()));
+  if (s < 0)
+    s += getpathLenth();
+  while (calcPathDistance(0, idx_counter + 1) <= s) {
+    idx_counter++;
+  }
+  return idx_counter;
 }
 
 int main(int argc, char *argv[]) {
