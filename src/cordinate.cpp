@@ -268,7 +268,7 @@ std::pair<double, double> CordinateConverter::calcDS(int idx, int next_idx,
   // 교차곱(cross product)을 이용해 d의 부호 결정:
   // AB x AP의 z성분이 음수면 오른쪽, 양수면 왼쪽으로 간주
   double cross = dx * (y - Ay) - dy * (x - Ax);
-  if (cross < 0) {
+  if (cross > 0) {
     d = -d;
   }
 
@@ -297,11 +297,14 @@ std::vector<double> CordinateConverter::FrenetToGlobal(double s, double d) {
       vectorScalarMultiple(vectorScalarDivision(path_vector, single_path_lenth),
                            path_to_projPoint_lenth),
       start_path_point);
+  std::vector<double> normalVector =
+      toNormal2DVector(vectorScalarDivision(path_vector, single_path_lenth));
+  std::vector<double>
 }
 
-std::vector<double> toNormal2DVector(std::vector<double> vector){
-    std::vector<double>
-
+std::vector<double> toNormal2DVector(std::vector<double> vector) {
+  std::vector<double> output = {vector[1], vector[0] * -1};
+  return output;
 }
 
 std::vector<double> vectorSubtract(std::vector<double> vectorA,

@@ -95,7 +95,7 @@ class cordinate_converter:
         proj_point = pointA + (proj_t * vectorA)
 
         d = np.linalg.norm(proj_point - pointC)
-        if np.cross(vectorA, vectorB)<0:
+        if np.cross(vectorA, vectorB)>0:
             d = -d
         s = proj_t * np.dot(vectorA, vectorA)
         output = [s, d]
