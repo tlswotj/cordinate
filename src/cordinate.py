@@ -49,7 +49,7 @@ class cordinate_converter:
                 closest_dist = dist
         return idx
     
-    def global_to_frenet(self, x, y):
+    def global_to_frenet_point(self, x, y):
         closest_idx = self._get_closest_index(x, y)
         out1 = self._calc_proj(closest_idx, closest_idx+1, x, y)
         out2 = self._calc_proj(closest_idx-1, closest_idx, x, y)
@@ -64,7 +64,13 @@ class cordinate_converter:
             s = out1[0] + self._calc_path_distance(0, closest_idx)
             d = out1[1]
         return [s, d]
-
+    
+    def global_to_frenet(self, path_list:list):
+        output = []
+        for i in range (0, len(path_list)):
+            output.append([self.global_to_frenet_point(path_list[i][0], path_list[i][1]), path_list[i][2]])
+        return output
+    
 
     def _calc_proj(self, idx, next_idx, x, y):
         path_size = len(self.global_path)      
