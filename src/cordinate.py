@@ -33,7 +33,7 @@ class cordinate_converter:
                 break
         self.node.get_logger().info(f"path has recived, total {len(self.global_path)} points")
 
-    def get_path_lenth(self):
+    def get_path_length(self):
         return self._calc_path_distance(0,len(self.global_path)-1)# len(self.global_path)
 
     def get_global_path(self):
@@ -135,7 +135,7 @@ def main():
     node = Node("cordinate_converter_test_node")
     converter = cordinate_converter(node)
     # 스피닝이 이미 호출되었으므로, 여기서도 spin_once() 호출 가능
-    path_length = converter.get_path_lenth()
+    path_length = converter.get_path_length()
     node.get_logger().info(f"Path length is :{path_length}")
     cord = converter.global_to_frenet(0.1134318,5.2239407)
     node.get_logger().info(f"frenet frame : s {cord[0]}, d {cord[1]}")
