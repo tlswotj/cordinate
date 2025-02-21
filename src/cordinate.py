@@ -68,9 +68,42 @@ class cordinate_converter:
     def global_to_frenet(self, path_list:list):
         output = []
         for i in range (0, len(path_list)):
-            output.append([self.global_to_frenet_point(path_list[i][0], path_list[i][1]), path_list[i][2]])
+            output.append([self.global_to_frenet_point(path_list[i][0], path_list[i][1])+ [path_list[i][2]]])
         return output
     
+    def frenet_to_global_point(self, s, d):
+        if(s<0):
+            s = s+self.get_path_length()
+        s = s % self.get_path_length()
+
+        start_idx = self._get_start_path_from_frenet(s)
+        next_idx = (start_idx+1)%len(self.global_path)
+        s = d-self.get_path_length(start_idx)
+
+        start_point = np.array([self.global_path[start_idx][0], self.global_path[start_idx][1]])
+        next_point = np.array([self.global_path[next_idx][0], self.global_path[next_idx][1]])
+
+        path_u_vector = (next_point - start_point)
+        projPoint = start_point + (path_u_vector*s)
+        normalVector = self.rotate_right_90(path_u_vector)
+        global_point = projPoint + (normalVector * d)
+        return list(global_point)
+
+    def frenet_to_global(self, path_list : list):
+        output=[]
+        for i in range (0, len(path_list)):
+            output.append(self.frenet_to_global_point(path_list[0], path_list[1])+[path_list[2]])
+        return output
+
+    def rotate_right_90(v):
+        return np.array([v[1], -v[0]])
+
+        
+    def _get_start_path_from_frenet(self, s):
+        idx = 0
+        while self._calc_path_distance(0, idx +1)<=s:
+            idx +=1
+        return idx
 
     def _calc_proj(self, idx, next_idx, x, y):
         path_size = len(self.global_path)      

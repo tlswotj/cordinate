@@ -167,8 +167,6 @@ std::vector<double> CordinateConverter::globalToFrenet(double x, double y) {
   std::pair<double, double> out2 = calcDS(closest_idx - 1, closest_idx, x, y);
   double dist;
   double s;
-  RCLCPP_INFO(node_->get_logger(), "s ; %.3f, d: %.3f", out1.second,
-              out1.first);
 
   if (std::abs(out1.first) > std::abs(out2.first)) {
     dist = out2.first;
@@ -287,8 +285,8 @@ std::vector<double> CordinateConverter::FrenetToGlobal(double s, double d) {
   int next_idx = (start_idx + 1) % global_path_.size();
   std::vector<double> start_path_point = {global_path_[start_idx][0],
                                           global_path_[start_idx][1]};
-  std::vector<double> next_path_point = {global_path_[start_idx][0],
-                                         global_path_[start_idx][1]};
+  std::vector<double> next_path_point = {global_path_[next_idx][0],
+                                         global_path_[next_idx][1]};
   std::vector<double> path_vector =
       pointToVector(start_path_point, next_path_point);
   double single_path_lenth = std::sqrt(dotProudct(path_vector, path_vector));
@@ -299,10 +297,13 @@ std::vector<double> CordinateConverter::FrenetToGlobal(double s, double d) {
       start_path_point);
   std::vector<double> normalVector =
       toNormal2DVector(vectorScalarDivision(path_vector, single_path_lenth));
-  std::vector<double>
+  std::vector<double> global_point =
+      vectorAdd(projPoint, vectorScalarMultiple(normalVector, d));
+  return global_point;
 }
 
-std::vector<double> toNormal2DVector(std::vector<double> vector) {
+std::vector<double>
+CordinateConverter::toNormal2DVector(std::vector<double> vector) {
   std::vector<double> output = {vector[1], vector[0] * -1};
   return output;
 }
@@ -316,8 +317,8 @@ std::vector<double> vectorSubtract(std::vector<double> vectorA,
   return output;
 }
 
-std::vector<double> vectorAdd(std::vector<double> vectorA,
-                              std::vector<double> vectorB) {
+std::vector<double> CordinateConverter::vectorAdd(std::vector<double> vectorA,
+                                                  std::vector<double> vectorB) {
   std::vector<double> output;
   for (int i = 0; i < std::min(vectorA.size(), vectorB.size()); i++) {
     output.push_back(vectorA[i] + vectorB[i]);
@@ -325,14 +326,16 @@ std::vector<double> vectorAdd(std::vector<double> vectorA,
   return output;
 }
 
-std::vector<double> vectorScalarMultiple(std::vector<double> vector, double a) {
+std::vector<double>
+CordinateConverter::vectorScalarMultiple(std::vector<double> vector, double a) {
   for (int i = 0; i < vector.size(); i++) {
     vector[i] *= a;
   }
   return vector;
 }
 
-std::vector<double> vectorScalarDivision(std::vector<double> vector, double a) {
+std::vector<double>
+CordinateConverter::vectorScalarDivision(std::vector<double> vector, double a) {
   std::vector<double> output;
   for (int i = 0; i < vector.size(); i++) {
     output.push_back(vector[i] / a);
@@ -340,8 +343,10 @@ std::vector<double> vectorScalarDivision(std::vector<double> vector, double a) {
   return output;
 }
 
-std::vector<double> pointToVector(std::vector<double> start_point,
+std::vector<double>
+CordinateConverter::pointToVector(std::vector<double> start_point,
                                   std::vector<double> end_point) {
+
   return vectorSubtract(end_point, start_point);
 }
 
@@ -355,15 +360,14 @@ std::vector<double> CordinateConverter::calcProjv(std::vector<double> vectorA,
 
 double CordinateConverter::dotProudct(std::vector<double> vectorA,
                                       std::vector<double> vectorB) {
-  double dot = vectorA[0] * vectorB[0] + vectorA[1] * vectorB[1];
-  return {dot};
+  double dot = (vectorA[0] * vectorB[0]) + (vectorA[1] * vectorB[1]);
+  return dot;
 }
 
-std::vector<double>
-CordinateConverter::crossProduct(std::vector<double> vectorA,
-                                 std::vector<double> vectorB) {
+double CordinateConverter::crossProduct(std::vector<double> vectorA,
+                                        std::vector<double> vectorB) {
   double cross = vectorA[0] * vectorB[1] - vectorA[1] * vectorB[0];
-  return {cross};
+  return cross;
 }
 
 int CordinateConverter::getStartPathFromFrenet(double s, double d) {
@@ -383,7 +387,9 @@ int main(int argc, char *argv[]) {
   auto node = rclcpp::Node::make_shared("cordinate_converter");
   CordinateConverter c(node, true);
   std::vector<double> a = c.globalToFrenet(0.1134318, 5.2239407);
+  std::vector<double> b = c.FrenetToGlobal(a[0], a[1]);
   RCLCPP_INFO(node->get_logger(), "entire path lenth: %.3f", c.getpathLenth());
   RCLCPP_INFO(node->get_logger(), "frenet frame : s %.3f, d %.3f", a[0], a[1]);
+  RCLCPP_INFO(node->get_logger(), "decode : s %.3f, d %.5f", b[0], b[1]);
   rclcpp::spin(node);
 }

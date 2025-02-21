@@ -48,10 +48,19 @@ private:
   std::vector<double> calcProjv(std::vector<double> vectorA,
                                 std::vector<double> vectorB);
 
-  std::vector<double> crossProduct(std::vector<double> vectorA,
-                                   std::vector<double> vectorB);
+  double crossProduct(std::vector<double> vectorA, std::vector<double> vectorB);
 
   double dotProudct(std::vector<double> vectorA, std::vector<double> vectorB);
+
+  std::vector<double> toNormal2DVector(std::vector<double> vector);
+  std::vector<double> pointToVector(std::vector<double> start_point,
+                                    std::vector<double> end_point);
+  std::vector<double> vectorScalarDivision(std::vector<double> vector,
+                                           double a);
+  std::vector<double> vectorScalarMultiple(std::vector<double> vector,
+                                           double a);
+  std::vector<double> vectorAdd(std::vector<double> vectorA,
+                                std::vector<double> vectorB);
 
   void path_publisher();
 
