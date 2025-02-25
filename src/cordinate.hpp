@@ -12,6 +12,17 @@
 //#include <ament_index_cpp/get_package_share_directory.hpp>
 //#include "geometry_msgs/msg/pose.hpp"
 
+struct pathInformation {
+  double x;
+  double y;
+  double v;
+  double s;
+  double d;
+  double distance;
+  double left_void;
+  double right_void;
+};
+
 class CordinateConverter {
 public:
   CordinateConverter(rclcpp::Node::SharedPtr node, bool node_mode,
@@ -76,6 +87,8 @@ private:
   std::vector<double> global_path_heading_;
   std::vector<double> global_path_distance_;
   std::vector<double> global_path_reaching_time_;
+  std::vector<pathInformation> path_;
+
   rclcpp::Node::SharedPtr node_;
   nav_msgs::msg::Path::SharedPtr global_path_msg_;
   OccupancyGridNode *map_node_;
