@@ -160,6 +160,8 @@ class cordinate_converter:
         for pose in msg.poses:
             self.global_path.append([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
         self.path_recived = True
+    
+
 
 
 
@@ -168,11 +170,12 @@ def main():
     node = Node("cordinate_converter_test_node")
     converter = cordinate_converter(node)
     # 스피닝이 이미 호출되었으므로, 여기서도 spin_once() 호출 가능
-    path_length = converter.get_path_length()
-    node.get_logger().info(f"Path length is :{path_length}")
-    cord = converter.global_to_frenet(0.1134318,5.2239407)
-    node.get_logger().info(f"frenet frame : s {cord[0]}, d {cord[1]}")
-    node.destroy_node()
+    #path_length = converter.get_path_length()
+    #node.get_logger().info(f"Path length is :{path_length}")
+    #cord = converter.global_to_frenet(0.1134318,5.2239407)
+    #node.get_logger().info(f"frenet frame : s {cord[0]}, d {cord[1]}")
+    #node.destroy_node()
+    print(converter.get_global_path())
     rclpy.shutdown()
 
 if __name__ == '__main__':
