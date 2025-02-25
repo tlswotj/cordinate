@@ -17,8 +17,9 @@ struct pathInformation {
   double y;
   double v;
   double s;
-  double d;
+  double heading;
   double distance;
+  double reaching_time;
   double left_void;
   double right_void;
 };
@@ -83,10 +84,6 @@ private:
 
   bool path_recives;
 
-  std::vector<std::vector<double>> global_path_;
-  std::vector<double> global_path_heading_;
-  std::vector<double> global_path_distance_;
-  std::vector<double> global_path_reaching_time_;
   std::vector<pathInformation> path_;
 
   rclcpp::Node::SharedPtr node_;

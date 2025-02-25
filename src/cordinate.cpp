@@ -84,45 +84,49 @@ void CordinateConverter::readPath(std::string path_file_path) {
   while (getline(path_file, line_temp)) {
     std::stringstream ss(line_temp);
     std::string cell;
-    std::vector<double> row;
-    int col_counter = 0;
-    while (getline(ss, cell, ',') && col_counter < 3) {
-      row.push_back(stod(cell));
-    }
-    global_path_.push_back(row);
+    pathInformation temp;
+
+    getline(ss, cell, ',');
+    temp.x = stod(cell);
+    getline(ss, cell, ',');
+    temp.y = stod(cell);
+    getline(ss, cell, ',');
+    temp.v = stod(cell);
+
+    path_.push_back(temp);
   }
 
   RCLCPP_INFO(node_->get_logger(),
               "successfully load csv path file, %ld points from %s",
-              global_path_.size(), path_file_path.c_str());
-  for (int i = 0; i < global_path_.size(); i++) {
-    global_path_heading_.push_back(calcPathToPathHeading(i));
-    global_path_distance_.push_back(calcPathToPathDistance(i));
-    global_path_reaching_time_.push_back(calcPathToPathRechingTime(i));
+              path_.size(), path_file_path.c_str());
+  for (int i = 0; i < path_.size(); i++) {
+    path_[i].heading = calcPathToPathHeading(i);
+    path_[i].distance = calcPathToPathDistance(i);
+    path_[i].reaching_time = calcPathToPathRechingTime(i);
   }
 }
 
 void CordinateConverter::readPath(nav_msgs::msg::Path path_topic) {
   for (int i = 0; i < path_topic.poses.size(); i++) {
-    std::vector<double> temp;
-    temp.push_back(path_topic.poses[i].pose.position.x);
-    temp.push_back(path_topic.poses[i].pose.position.y);
-    temp.push_back(path_topic.poses[i].pose.position.z);
-    global_path_.push_back(temp);
+    pathInformation path;
+    path.x = path_topic.poses[i].pose.position.x;
+    path.y = path_topic.poses[i].pose.position.y;
+    path.v = path_topic.poses[i].pose.position.z;
+    path_.push_back(path);
   }
-  for (int i = 0; i < global_path_.size(); i++) {
-    global_path_heading_.push_back(calcPathToPathHeading(i));
-    global_path_distance_.push_back(calcPathToPathDistance(i));
-    global_path_reaching_time_.push_back(calcPathToPathRechingTime(i));
+  for (int i = 0; i < path_.size(); i++) {
+    path_[i].heading = calcPathToPathHeading(i);
+    path_[i].distance = calcPathToPathDistance(i);
+    path_[i].reaching_time = calcPathToPathRechingTime(i);
   }
 }
 
 double CordinateConverter::calcPathToPathHeading(int idx) {
-  idx = idx % global_path_.size();
-  int next_idx = (idx + 1) % global_path_.size();
+  idx = idx % path_.size();
+  int next_idx = (idx + 1) % path_.size();
 
-  double cur_x = global_path_[idx][0], cur_y = global_path_[idx][1];
-  double next_x = global_path_[next_idx][0], next_y = global_path_[next_idx][1];
+  double cur_x = path_[idx].x, cur_y = path_[idx].y;
+  double next_x = path_[next_idx].x, next_y = path_[next_idx].y;
 
   double dx = next_x - cur_x, dy = next_y - cur_y;
   double theta = atan2(dy, dx);
@@ -131,19 +135,19 @@ double CordinateConverter::calcPathToPathHeading(int idx) {
 
 double CordinateConverter::calcPathToPathDistance(int idx) {
 
-  idx = idx % global_path_.size();
-  int next_idx = (idx + 1) % global_path_.size();
+  idx = idx % path_.size();
+  int next_idx = (idx + 1) % path_.size();
 
-  double cur_x = global_path_[idx][0], cur_y = global_path_[idx][1];
-  double next_x = global_path_[next_idx][0], next_y = global_path_[next_idx][1];
+  double cur_x = path_[idx].x, cur_y = path_[idx].y;
+  double next_x = path_[next_idx].x, next_y = path_[next_idx].y;
 
   return calcDistance(cur_x, cur_y, next_x, next_y);
 }
 
 double CordinateConverter::calcPathToPathRechingTime(int idx) {
-  idx = idx % global_path_.size();
-  int prev_idx = ((idx - 1) + global_path_.size()) % global_path_.size();
-  double speed = global_path_[idx][2], prev_speed = global_path_[prev_idx][2];
+  idx = idx % path_.size();
+  int prev_idx = ((idx - 1) + path_.size()) % path_.size();
+  double speed = path_[idx].v, prev_speed = path_[prev_idx].v;
   double avg_speed = (speed + prev_speed) / 2;
   return calcPathToPathDistance(prev_idx) / avg_speed;
 }
@@ -151,8 +155,8 @@ double CordinateConverter::calcPathToPathRechingTime(int idx) {
 int CordinateConverter::getClosestsIndex(double x, double y) {
   double closest_dist = INFINITY;
   int idx;
-  for (int i = 0; i < global_path_.size(); i++) {
-    double dist = calcDistance(global_path_[i][0], global_path_[i][1], x, y);
+  for (int i = 0; i < path_.size(); i++) {
+    double dist = calcDistance(path_[i].x, path_[i].y, x, y);
     if (closest_dist > dist) {
       closest_dist = dist;
       idx = i;
@@ -184,7 +188,7 @@ std::vector<double> CordinateConverter::globalToFrenet(double x, double y) {
 double CordinateConverter::calcPathDistance(int idx_start, int idx_end) {
   double distance_counter = 0;
   if (idx_end < idx_start) {
-    idx_end += global_path_.size();
+    idx_end += path_.size();
   }
   for (int idx = idx_start; idx < idx_end; idx++) {
     distance_counter += calcPathToPathDistance(idx);
@@ -198,7 +202,7 @@ double CordinateConverter::calcDistance(double x, double y, double x1,
 }
 
 double CordinateConverter::getpathLenth() {
-  return calcPathDistance(0, global_path_.size() - 1);
+  return calcPathDistance(0, path_.size() - 1);
 }
 
 void CordinateConverter::path_publisher() {
@@ -212,14 +216,14 @@ void CordinateConverter::path_msg_generator() {
   global_path_msg_->header.stamp = node_->get_clock()->now();
   global_path_msg_->header.frame_id = "map";
 
-  for (int i = 0; i < global_path_.size(); i++) {
+  for (int i = 0; i < path_.size(); i++) {
     geometry_msgs::msg::PoseStamped pose;
     pose.header.stamp = node_->get_clock()->now();
     pose.header.frame_id = "map";
-    pose.pose.position.x = global_path_[i][0];
-    pose.pose.position.y = global_path_[i][1];
-    pose.pose.position.z = global_path_[i][2];
-    pose.pose.orientation.z = global_path_heading_[i];
+    pose.pose.position.x = path_[i].x;
+    pose.pose.position.y = path_[i].y;
+    pose.pose.position.z = path_[i].v;
+    pose.pose.orientation.z = path_[i].heading;
     pose.pose.orientation.w = 1.0; // 단순한 예제이므로 회전 없음
     global_path_msg_->poses.push_back(pose);
   }
@@ -231,18 +235,26 @@ void CordinateConverter::pathCallback(nav_msgs::msg::Path msg) {
 }
 
 std::vector<std::vector<double>> CordinateConverter::getGlobalPath() {
-  return global_path_;
+  std::vector<std::vector<double>> output;
+  for (int i = 0; i < path_.size(); i++) {
+    std::vector<double> temp;
+    temp.push_back(path_[i].x);
+    temp.push_back(path_[i].y);
+    temp.push_back(path_[i].v);
+    output.push_back(temp);
+  }
+  return output;
 }
 
 std::pair<double, double> CordinateConverter::calcDS(int idx, int next_idx,
                                                      double x, double y) {
   // 인덱스가 음수가 될 경우를 고려하여 올바르게 보정합니다.
-  int n = global_path_.size();
+  int n = path_.size();
   idx = (idx % n + n) % n;
   next_idx = (next_idx % n + n) % n;
 
-  double Ax = global_path_[idx][0], Ay = global_path_[idx][1];
-  double Bx = global_path_[next_idx][0], By = global_path_[next_idx][1];
+  double Ax = path_[idx].x, Ay = path_[idx].y;
+  double Bx = path_[next_idx].x, By = path_[next_idx].y;
 
   // 벡터 AB 구하기
   double dx = Bx - Ax;
@@ -282,11 +294,10 @@ std::vector<double> CordinateConverter::FrenetToGlobal(double s, double d) {
     s += getpathLenth();
   s = std::fmod(s, getpathLenth());
   int start_idx = getStartPathFromFrenet(s, d);
-  int next_idx = (start_idx + 1) % global_path_.size();
-  std::vector<double> start_path_point = {global_path_[start_idx][0],
-                                          global_path_[start_idx][1]};
-  std::vector<double> next_path_point = {global_path_[next_idx][0],
-                                         global_path_[next_idx][1]};
+  int next_idx = (start_idx + 1) % path_.size();
+  std::vector<double> start_path_point = {path_[start_idx].x,
+                                          path_[start_idx].y};
+  std::vector<double> next_path_point = {path_[next_idx].x, path_[next_idx].y};
   std::vector<double> path_vector =
       pointToVector(start_path_point, next_path_point);
   double single_path_lenth = std::sqrt(dotProudct(path_vector, path_vector));
