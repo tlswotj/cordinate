@@ -60,6 +60,9 @@ CordinateConverter::CordinateConverter(rclcpp::Node::SharedPtr node,
         timer_->cancel();
       });
     }
+    calcAllWallDist();
+    std::pair<int, int> test = map_node_->map2Index(-7.27, -5.38);
+    RCLCPP_INFO(node_->get_logger(), "point : %d, %d", test.first, test.second);
   } else {
     RCLCPP_INFO(node_->get_logger(), "waiting for global path topic");
     rclcpp::QoS qos(rclcpp::KeepLast(1));
@@ -69,6 +72,7 @@ CordinateConverter::CordinateConverter(rclcpp::Node::SharedPtr node,
         "global_path", qos, [this](const nav_msgs::msg::Path::SharedPtr msg) {
           pathCallback(*msg);
         });
+    calcAllWallDist();
   }
 }
 
@@ -222,7 +226,8 @@ void CordinateConverter::path_msg_generator() {
     pose.header.frame_id = "map";
     pose.pose.position.x = path_[i].x;
     pose.pose.position.y = path_[i].y;
-    pose.pose.position.z = path_[i].v;
+    pose.pose.position.z = 0;
+    // pose.pose.position.z = path_[i].v;
     pose.pose.orientation.z = path_[i].heading;
     pose.pose.orientation.w = 1.0; // 단순한 예제이므로 회전 없음
     global_path_msg_->poses.push_back(pose);
@@ -276,7 +281,7 @@ std::pair<double, double> CordinateConverter::calcDS(int idx, int next_idx,
       std::sqrt((x - proj_x) * (x - proj_x) + (y - proj_y) * (y - proj_y));
 
   // 교차곱(cross product)을 이용해 d의 부호 결정:
-  // AB x AP의 z성분이 음수면 오른쪽, 양수면 왼쪽으로 간주
+  // AB x AP의 z성분이 음수면 오른쪽, 양수면 왼쪽으로 간주><
   double cross = dx * (y - Ay) - dy * (x - Ax);
   if (cross > 0) {
     d = -d;
@@ -307,14 +312,14 @@ std::vector<double> CordinateConverter::FrenetToGlobal(double s, double d) {
                            path_to_projPoint_lenth),
       start_path_point);
   std::vector<double> normalVector =
-      toNormal2DVector(vectorScalarDivision(path_vector, single_path_lenth));
+      toNormal2DVectorR(vectorScalarDivision(path_vector, single_path_lenth));
   std::vector<double> global_point =
       vectorAdd(projPoint, vectorScalarMultiple(normalVector, d));
   return global_point;
 }
 
 std::vector<double>
-CordinateConverter::toNormal2DVector(std::vector<double> vector) {
+CordinateConverter::toNormal2DVectorR(std::vector<double> vector) {
   std::vector<double> output = {vector[1], vector[0] * -1};
   return output;
 }
@@ -393,6 +398,71 @@ int CordinateConverter::getStartPathFromFrenet(double s, double d) {
   return idx_counter;
 }
 
+void CordinateConverter::calcAllWallDist() {
+  for (int i = 0; i < path_.size(); i++) {
+    calcWallDist(i);
+  }
+}
+
+std::pair<double, double> CordinateConverter::getWallDist(int idx) {
+  return std::make_pair(path_[idx].right_void, path_[idx].left_void);
+}
+
+void CordinateConverter::calcWallDist(int idx) {
+  // if (idx < 0) {
+  //   while (idx < 0) {
+  //     idx = idx + path_.size();
+  //   }
+  // }
+  int next_idx = (idx + 1) % path_.size();
+  RCLCPP_INFO(node_->get_logger(), "idx : %d", idx);
+  std::vector<double> start_point = {path_[idx].x, path_[idx].y};
+  std::vector<double> end_point = {path_[next_idx].x, path_[next_idx].y};
+  std::vector<double> path_vector = pointToVector(start_point, end_point);
+
+  std::pair<double, double> output =
+      findWall(start_point[0], start_point[1], path_vector, 2, true);
+  path_[idx].right_void =
+      calcDistance(start_point[0], start_point[1], output.first, output.second);
+  output = findWall(start_point[0], start_point[1], path_vector, 2, false);
+  path_[idx].left_void =
+      calcDistance(start_point[0], start_point[1], output.first, output.second);
+}
+
+std::pair<double, double>
+CordinateConverter::findWall(double point_x, double point_y,
+                             std::vector<double> path_vector, double max_dist,
+                             bool right) {
+  double magnitude = sqrt(dotProudct(path_vector, path_vector));
+  // 정규화 후 0.05m(=1/20) 스텝으로 스케일링
+  path_vector = vectorScalarDivision(path_vector, magnitude * 20);
+
+  double serching_point_x = point_x, serching_point_y = point_y;
+  std::vector<std::vector<int8_t>> map = map_node_->getMap();
+  /*RCLCPP_INFO(node_->get_logger(), "size of map : %d x %d\n point data : %d",
+              map[0].size(), map.size(), map_node_->getPixel(point_x, point_y));
+*/
+  while (!wallDetector(serching_point_x, serching_point_y) &&
+         sqrt(pow(serching_point_x - point_x, 2) +
+              pow(serching_point_y - point_y, 2)) < max_dist) {
+    if (right) {
+      serching_point_x = serching_point_x + path_vector[1];
+      serching_point_y = serching_point_y - path_vector[0];
+    } else {
+      serching_point_x = serching_point_x - path_vector[1];
+      serching_point_y = serching_point_y + path_vector[0];
+    }
+  }
+  /*RCLCPP_INFO(node_->get_logger(), "caled point :  %.3f, %.3f",
+              serching_point_x, serching_point_y);
+  */
+  return std::make_pair(serching_point_x, serching_point_y);
+}
+
+bool CordinateConverter::wallDetector(double x, double y) {
+  return map_node_->getPixel(x, y) == 0 ? false : true;
+}
+
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   auto node = rclcpp::Node::make_shared("cordinate_converter");
@@ -402,5 +472,11 @@ int main(int argc, char *argv[]) {
   RCLCPP_INFO(node->get_logger(), "entire path lenth: %.3f", c.getpathLenth());
   RCLCPP_INFO(node->get_logger(), "frenet frame : s %.3f, d %.3f", a[0], a[1]);
   RCLCPP_INFO(node->get_logger(), "decode : s %.3f, d %.5f", b[0], b[1]);
+  for (int i = 0; i < 92; i++) {
+    std::pair<double, double> wall_dist = c.getWallDist(i);
+    RCLCPP_INFO(node->get_logger(),
+                "wall distance at index %d : R %.3f, L %.3f ", i,
+                wall_dist.first, wall_dist.second);
+  }
   rclcpp::spin(node);
 }

@@ -15,7 +15,7 @@ public:
     node_ = node;
     pgm_file_ = pgm_path;
     yaml_file_ = yaml_path;
-    inflation_radius_ = 0.30;
+    inflation_radius_ = 0.35;
 
     if (!pgm_file_.empty() && !yaml_file_.empty()) {
       loadMap();
@@ -28,8 +28,38 @@ public:
         std::chrono::seconds(1),
         std::bind(&OccupancyGridNode::publishMap, this));
   }
+  /*
+   int8_t getPixel(double x, double y) {
+     std::pair<int, int> pixel_idx = map2Index(x, y);
+     if (pixel_idx.first < 0 || pixel_idx.first >= map_[0].size() ||
+         pixel_idx.second < 0 || pixel_idx.second >= map_.size()) {
+       RCLCPP_INFO(node_->get_logger(), "caled index :  %.0f, %.0f",
+                   pixel_idx.first, pixel_idx.second);
+       return -1;
+     }
+     return map_[pixel_idx.first][pixel_idx.second];
+   }
+   */
+  std::vector<std::vector<int8_t>> getMap() { return map_; }
 
-  uint8_t getPixel(int x, int y) { return map_[y][x]; }
+  std::pair<int, int> map2Index(double x, double y) {
+    // world 좌표와 origin의 차이를 해상도로 나눕니다.
+    int col = static_cast<int>(std::floor((x - origin[0]) / resolution));
+    int row = static_cast<int>(std::floor((y - origin[1]) / resolution));
+    return std::make_pair(row, col); // row, col 순서
+  }
+
+  int8_t getPixel(double x, double y) {
+    auto index = map2Index(x, y);
+    // index.first: row, index.second: col
+    if (index.first < 0 || index.first >= static_cast<int>(map_.size()) ||
+        index.second < 0 || index.second >= static_cast<int>(map_[0].size())) {
+      RCLCPP_INFO(node_->get_logger(), "calculated index: %d, %d", index.first,
+                  index.second);
+      return -1;
+    }
+    return map_[index.first][index.second];
+  }
 
 private:
   rclcpp::Node::SharedPtr node_;
@@ -44,6 +74,7 @@ private:
   bool negate;
   double occupied_thresh;
   double free_thresh;
+  int width, height, max_value;
   std::vector<std::vector<int8_t>> map_;
 
   rclcpp::TimerBase::SharedPtr publish_timer_;
@@ -96,7 +127,6 @@ private:
     }
 
     std::string format;
-    int width, height, max_value;
     pgm_file_stream >> format >> width >> height >> max_value;
     pgm_file_stream.ignore(1); // newline 무시
 
@@ -148,6 +178,8 @@ private:
     RCLCPP_INFO(node_->get_logger(),
                 "Map loading completed: %d x %d, resolution: %.3f", width,
                 height, resolution);
+    vector_converter(map_data_.data, map_data_.info.width,
+                     map_data_.info.height);
   }
 
   // 인플레이션 함수: 장애물(100) 주변의 free 셀(0)에 대해, 거리에 따른
@@ -196,6 +228,7 @@ private:
 
   void vector_converter(std::vector<int8_t> occupancy_data, int wide,
                         int height) {
+    map_.clear();
     for (int y = 0; y < height; y++) {
       std::vector<int8_t> temp;
       for (int x = 0; x < wide; x++) {

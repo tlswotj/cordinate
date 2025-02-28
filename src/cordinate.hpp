@@ -35,8 +35,12 @@ public:
   std::vector<double> globalToFrenet(double x, double y);
   std::vector<double> FrenetToGlobal(double s, double d);
   double getpathLenth();
+  void calcAllWallDist();
+  std::pair<double, double> getWallDist(int idx);
 
 private:
+  void calcWallDist(int idx);
+
   int getClosestsIndex(double x, double y);
 
   int getStartPathFromFrenet(double s, double d);
@@ -64,7 +68,7 @@ private:
 
   double dotProudct(std::vector<double> vectorA, std::vector<double> vectorB);
 
-  std::vector<double> toNormal2DVector(std::vector<double> vector);
+  std::vector<double> toNormal2DVectorR(std::vector<double> vector);
   std::vector<double> pointToVector(std::vector<double> start_point,
                                     std::vector<double> end_point);
   std::vector<double> vectorScalarDivision(std::vector<double> vector,
@@ -73,6 +77,12 @@ private:
                                            double a);
   std::vector<double> vectorAdd(std::vector<double> vectorA,
                                 std::vector<double> vectorB);
+
+  std::pair<double, double> findWall(double point_X, double point_y,
+                                     std::vector<double> path_vector,
+                                     double max_dist, bool right);
+
+  bool wallDetector(double x, double y);
 
   void path_publisher();
 
