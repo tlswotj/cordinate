@@ -30,6 +30,7 @@ public:
 
   std::vector<double> globalToFrenet(double x, double y);
   std::vector<double> FrenetToGlobal(double s, double d);
+
   double getpathLenth();
 
 private:
