@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 //#include "std_msgs/msg/header.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "pgm_to_occupancy_grid_node.cpp"
 //#include "pgm_to_occupancy_grid_node.cpp"
@@ -38,7 +39,11 @@ public:
   void calcAllWallDist();
   std::pair<double, double> getWallDist(int idx);
 
+  std::vector<std::vector<int8_t>> getMap() {}
+
 private:
+  void mapCallBack(nav_msgs::msg::OccupancyGrid msg);
+
   void calcWallDist(int idx);
 
   int getClosestsIndex(double x, double y);
@@ -82,6 +87,8 @@ private:
                                      std::vector<double> path_vector,
                                      double max_dist, bool right);
 
+  void scanCallBack(sensor_msgs::msg::LaserScan msg);
+
   bool wallDetector(double x, double y);
 
   void path_publisher();
@@ -98,6 +105,7 @@ private:
 
   rclcpp::Node::SharedPtr node_;
   nav_msgs::msg::Path::SharedPtr global_path_msg_;
+  std::vector<std::vector<int8_t>> map_;
   OccupancyGridNode *map_node_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr publisher_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr subscriber_;

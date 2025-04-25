@@ -2,6 +2,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <cmath>
@@ -73,6 +74,20 @@ CordinateConverter::CordinateConverter(rclcpp::Node::SharedPtr node,
           pathCallback(*msg);
         });
     calcAllWallDist();
+  }
+}
+
+void CordinateConverter::scanCallBack(sensor_msgs::msg::LaserScan msg) {}
+
+void CordinateConverter::mapCallBack(nav_msgs::msg::OccupancyGrid msg) {
+  map_.clear();
+  std::vector<int8_t> data = msg.data;
+  for (int i = 0; i < msg.info.height; i++) {
+    std::vector<int8_t> temp;
+    for (int j = 0; j < msg.info.width; j++) {
+      temp.push_back(data[i * msg.info.width + j]);
+    }
+    map_.push_back(temp);
   }
 }
 

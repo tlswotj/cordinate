@@ -11,7 +11,10 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
-#find_package(sensor_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
+find_package(laser_geometery REQUIRED)
 
 include_directories(
   "${PROJECT_SOURCE_DIR}/src"
@@ -41,7 +44,7 @@ include_directories(
 
 add_executable(cordinate_converter src/cordinate.cpp)
 
-ament_target_dependencies(cordinate_converter rclcpp std_msgs nav_msgs geometry_msgs)
+ament_target_dependencies(cordinate_converter rclcpp std_msgs sensor_msgs nav_msgs geometry_msgs tf2 tf2_ros laser_geometery)
 
 #target_link_libraries(rf_publisher_node ${LIBSERIAL_LIB})
 
