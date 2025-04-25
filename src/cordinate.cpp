@@ -2,7 +2,6 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <cmath>
@@ -15,117 +14,26 @@ CordinateConverter::CordinateConverter(rclcpp::Node::SharedPtr node,
                                        std::string config_file_path = "",
                                        const std::string path_type = "ring") {
   node_ = node;
-  node_mode_ = node_mode;
-
-  if (node_mode_) {
-    if (config_file_path == "") {
-      config_file_path =
-          ament_index_cpp::get_package_share_directory("cordinate") +
-          "/config/config.yaml";
-    }
-    std::string path_file_path, pgm_file_path, map_yaml_file_path;
-
-    std::ifstream file(config_file_path);
-    if (!file.is_open()) {
-      RCLCPP_ERROR(node->get_logger(), "cannot open path file : %s",
-                   config_file_path.c_str());
-    } else {
-      std::string yaml_line;
-      while (std::getline(file, yaml_line)) {
-        std::istringstream ss(yaml_line);
-        std::string key;
-        ss >> key;
-        if (key == "path:") {
-          ss >> path_file_path;
-        } else if (key == "map_yaml:") {
-          ss >> map_yaml_file_path;
-        } else if (key == "map_pgm:") {
-          ss >> pgm_file_path;
-        }
-      }
-
-      readPath(path_file_path);
-      path_msg_generator();
-
-      file.close();
-      map_node_ =
-          new OccupancyGridNode(node_, pgm_file_path, map_yaml_file_path);
-      rclcpp::QoS qos(rclcpp::KeepLast(1));
-      qos.transient_local();
-      qos.reliable();
-
-      publisher_ =
-          node_->create_publisher<nav_msgs::msg::Path>("global_path", qos);
-      timer_ = node_->create_wall_timer(std::chrono::seconds(1), [this]() {
-        path_publisher();
-        timer_->cancel();
-      });
-    }
-    calcAllWallDist();
-    std::pair<int, int> test = map_node_->map2Index(-7.27, -5.38);
-    RCLCPP_INFO(node_->get_logger(), "point : %d, %d", test.first, test.second);
-  } else {
-    RCLCPP_INFO(node_->get_logger(), "waiting for global path topic");
-    rclcpp::QoS qos(rclcpp::KeepLast(1));
-    qos.transient_local();
-    qos.reliable();
-    subscriber_ = node_->create_subscription<nav_msgs::msg::Path>(
-        "global_path", qos, [this](const nav_msgs::msg::Path::SharedPtr msg) {
-          pathCallback(*msg);
-        });
-    calcAllWallDist();
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node_);
+  RCLCPP_INFO(node_->get_logger(), "waiting for global path topic");
+  rclcpp::QoS qos(rclcpp::KeepLast(1));
+  qos.transient_local();
+  qos.reliable();
+  RCLCPP_INFO(node_->get_logger(), "qos setting complete");
+  subscriber_ = node_->create_subscription<nav_msgs::msg::Path>(
+      "global_path", qos,
+      [this](const nav_msgs::msg::Path::SharedPtr msg) { readPath(*msg); });
+  while (rclcpp::ok() && path_.size() == 0) {
+    executor.spin_some(); // 비동기적으로 콜백 처리
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 }
 
-void CordinateConverter::scanCallBack(sensor_msgs::msg::LaserScan msg) {}
-
-void CordinateConverter::mapCallBack(nav_msgs::msg::OccupancyGrid msg) {
-  map_.clear();
-  std::vector<int8_t> data = msg.data;
-  for (int i = 0; i < msg.info.height; i++) {
-    std::vector<int8_t> temp;
-    for (int j = 0; j < msg.info.width; j++) {
-      temp.push_back(data[i * msg.info.width + j]);
-    }
-    map_.push_back(temp);
-  }
-}
-
-CordinateConverter::~CordinateConverter() {
-  if (node_mode_) {
-    delete map_node_;
-  }
-}
-
-void CordinateConverter::readPath(std::string path_file_path) {
-  std::ifstream path_file(path_file_path);
-  std::string line_temp;
-  while (getline(path_file, line_temp)) {
-    std::stringstream ss(line_temp);
-    std::string cell;
-    pathInformation temp;
-
-    getline(ss, cell, ',');
-    temp.x = stod(cell);
-    getline(ss, cell, ',');
-    temp.y = stod(cell);
-    getline(ss, cell, ',');
-    temp.v = stod(cell);
-
-    path_.push_back(temp);
-  }
-
-  RCLCPP_INFO(node_->get_logger(),
-              "successfully load csv path file, %ld points from %s",
-              path_.size(), path_file_path.c_str());
-  for (int i = 0; i < path_.size(); i++) {
-    path_[i].heading = calcPathToPathHeading(i);
-    path_[i].distance = calcPathToPathDistance(i);
-    path_[i].reaching_time = calcPathToPathRechingTime(i);
-  }
-}
+CordinateConverter::~CordinateConverter() {}
 
 void CordinateConverter::readPath(nav_msgs::msg::Path path_topic) {
+  RCLCPP_INFO(node_->get_logger(), "topic recived");
   for (int i = 0; i < path_topic.poses.size(); i++) {
     pathInformation path;
     path.x = path_topic.poses[i].pose.position.x;
@@ -138,6 +46,7 @@ void CordinateConverter::readPath(nav_msgs::msg::Path path_topic) {
     path_[i].distance = calcPathToPathDistance(i);
     path_[i].reaching_time = calcPathToPathRechingTime(i);
   }
+  RCLCPP_INFO(node_->get_logger(), "path prosses complete");
 }
 
 double CordinateConverter::calcPathToPathHeading(int idx) {
@@ -153,7 +62,6 @@ double CordinateConverter::calcPathToPathHeading(int idx) {
 }
 
 double CordinateConverter::calcPathToPathDistance(int idx) {
-
   idx = idx % path_.size();
   int next_idx = (idx + 1) % path_.size();
 
@@ -222,36 +130,6 @@ double CordinateConverter::calcDistance(double x, double y, double x1,
 
 double CordinateConverter::getpathLenth() {
   return calcPathDistance(0, path_.size() - 1);
-}
-
-void CordinateConverter::path_publisher() {
-  publisher_->publish(*global_path_msg_);
-  RCLCPP_INFO(node_->get_logger(), "Published Path with %zu points",
-              global_path_msg_->poses.size());
-}
-
-void CordinateConverter::path_msg_generator() {
-  global_path_msg_ = std::make_shared<nav_msgs::msg::Path>();
-  global_path_msg_->header.stamp = node_->get_clock()->now();
-  global_path_msg_->header.frame_id = "map";
-
-  for (int i = 0; i < path_.size(); i++) {
-    geometry_msgs::msg::PoseStamped pose;
-    pose.header.stamp = node_->get_clock()->now();
-    pose.header.frame_id = "map";
-    pose.pose.position.x = path_[i].x;
-    pose.pose.position.y = path_[i].y;
-    pose.pose.position.z = 0;
-    // pose.pose.position.z = path_[i].v;
-    pose.pose.orientation.z = path_[i].heading;
-    pose.pose.orientation.w = 1.0; // 단순한 예제이므로 회전 없음
-    global_path_msg_->poses.push_back(pose);
-  }
-  global_path_msg_;
-}
-
-void CordinateConverter::pathCallback(nav_msgs::msg::Path msg) {
-  global_path_msg_ = std::make_shared<nav_msgs::msg::Path>(msg);
 }
 
 std::vector<std::vector<double>> CordinateConverter::getGlobalPath() {
@@ -413,71 +291,6 @@ int CordinateConverter::getStartPathFromFrenet(double s, double d) {
   return idx_counter;
 }
 
-void CordinateConverter::calcAllWallDist() {
-  for (int i = 0; i < path_.size(); i++) {
-    calcWallDist(i);
-  }
-}
-
-std::pair<double, double> CordinateConverter::getWallDist(int idx) {
-  return std::make_pair(path_[idx].right_void, path_[idx].left_void);
-}
-
-void CordinateConverter::calcWallDist(int idx) {
-  // if (idx < 0) {
-  //   while (idx < 0) {
-  //     idx = idx + path_.size();
-  //   }
-  // }
-  int next_idx = (idx + 1) % path_.size();
-  RCLCPP_INFO(node_->get_logger(), "idx : %d", idx);
-  std::vector<double> start_point = {path_[idx].x, path_[idx].y};
-  std::vector<double> end_point = {path_[next_idx].x, path_[next_idx].y};
-  std::vector<double> path_vector = pointToVector(start_point, end_point);
-
-  std::pair<double, double> output =
-      findWall(start_point[0], start_point[1], path_vector, 2, true);
-  path_[idx].right_void =
-      calcDistance(start_point[0], start_point[1], output.first, output.second);
-  output = findWall(start_point[0], start_point[1], path_vector, 2, false);
-  path_[idx].left_void =
-      calcDistance(start_point[0], start_point[1], output.first, output.second);
-}
-
-std::pair<double, double>
-CordinateConverter::findWall(double point_x, double point_y,
-                             std::vector<double> path_vector, double max_dist,
-                             bool right) {
-  double magnitude = sqrt(dotProudct(path_vector, path_vector));
-  // 정규화 후 0.05m(=1/20) 스텝으로 스케일링
-  path_vector = vectorScalarDivision(path_vector, magnitude * 20);
-
-  double serching_point_x = point_x, serching_point_y = point_y;
-  std::vector<std::vector<int8_t>> map = map_node_->getMap();
-  /*RCLCPP_INFO(node_->get_logger(), "size of map : %d x %d\n point data : %d",
-              map[0].size(), map.size(), map_node_->getPixel(point_x, point_y));
-*/
-  while (!wallDetector(serching_point_x, serching_point_y) &&
-         sqrt(pow(serching_point_x - point_x, 2) +
-              pow(serching_point_y - point_y, 2)) < max_dist) {
-    if (right) {
-      serching_point_x = serching_point_x + path_vector[1];
-      serching_point_y = serching_point_y - path_vector[0];
-    } else {
-      serching_point_x = serching_point_x - path_vector[1];
-      serching_point_y = serching_point_y + path_vector[0];
-    }
-  }
-  /*RCLCPP_INFO(node_->get_logger(), "caled point :  %.3f, %.3f",
-              serching_point_x, serching_point_y);
-  */
-  return std::make_pair(serching_point_x, serching_point_y);
-}
-
-bool CordinateConverter::wallDetector(double x, double y) {
-  return map_node_->getPixel(x, y) == 0 ? false : true;
-}
-
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   auto node = rclcpp::Node::make_shared("cordinate_converter");
@@ -487,11 +300,5 @@ int main(int argc, char *argv[]) {
   RCLCPP_INFO(node->get_logger(), "entire path lenth: %.3f", c.getpathLenth());
   RCLCPP_INFO(node->get_logger(), "frenet frame : s %.3f, d %.3f", a[0], a[1]);
   RCLCPP_INFO(node->get_logger(), "decode : s %.3f, d %.5f", b[0], b[1]);
-  for (int i = 0; i < 92; i++) {
-    std::pair<double, double> wall_dist = c.getWallDist(i);
-    RCLCPP_INFO(node->get_logger(),
-                "wall distance at index %d : R %.3f, L %.3f ", i,
-                wall_dist.first, wall_dist.second);
-  }
   rclcpp::spin(node);
 }

@@ -1,3 +1,5 @@
+#include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include <cmath>
@@ -5,13 +7,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-//#include "std_msgs/msg/header.hpp"
-#include "nav_msgs/msg/occupancy_grid.hpp"
-#include "nav_msgs/msg/path.hpp"
-#include "pgm_to_occupancy_grid_node.cpp"
-//#include "pgm_to_occupancy_grid_node.cpp"
-//#include <ament_index_cpp/get_package_share_directory.hpp>
-//#include "geometry_msgs/msg/pose.hpp"
 
 struct pathInformation {
   double x;
@@ -36,21 +31,11 @@ public:
   std::vector<double> globalToFrenet(double x, double y);
   std::vector<double> FrenetToGlobal(double s, double d);
   double getpathLenth();
-  void calcAllWallDist();
-  std::pair<double, double> getWallDist(int idx);
-
-  std::vector<std::vector<int8_t>> getMap() {}
 
 private:
-  void mapCallBack(nav_msgs::msg::OccupancyGrid msg);
-
-  void calcWallDist(int idx);
-
   int getClosestsIndex(double x, double y);
 
   int getStartPathFromFrenet(double s, double d);
-
-  void readPath(std::string path_file_path);
 
   void readPath(nav_msgs::msg::Path path_topic);
 
@@ -83,30 +68,12 @@ private:
   std::vector<double> vectorAdd(std::vector<double> vectorA,
                                 std::vector<double> vectorB);
 
-  std::pair<double, double> findWall(double point_X, double point_y,
-                                     std::vector<double> path_vector,
-                                     double max_dist, bool right);
-
-  void scanCallBack(sensor_msgs::msg::LaserScan msg);
-
-  bool wallDetector(double x, double y);
-
-  void path_publisher();
-
-  void path_msg_generator();
-
-  void pathCallback(nav_msgs::msg::Path msg);
-
   bool node_mode_;
 
   bool path_recives;
 
   std::vector<pathInformation> path_;
-
   rclcpp::Node::SharedPtr node_;
-  nav_msgs::msg::Path::SharedPtr global_path_msg_;
-  std::vector<std::vector<int8_t>> map_;
-  OccupancyGridNode *map_node_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr publisher_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr subscriber_;
   rclcpp::TimerBase::SharedPtr timer_;
